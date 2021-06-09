@@ -890,7 +890,7 @@ contract LockProxyGroup is Ownable {
         require(groupTokenNumMap[groupKey]!=0, "group not exisit");
         require(Utils.equalStorage(groupTokenHashMap[groupKey][chainId], Utils.addressToBytes(asset)),"asset not in group");
         require(_transferToContract(asset, amount), "transfer asset from fromAddress to lock_proxy contract  failed!");
-        groupBalance[asset][groupKey].add(amount);
+        groupBalance[asset][groupKey] = groupBalance[asset][groupKey].add(amount);
         
         emit AddCrossChainLiquidityEvent(_msgSender(), groupKey, asset, amount);
     }
@@ -906,7 +906,7 @@ contract LockProxyGroup is Ownable {
         bytes memory toProxyHash = proxyHashMap[toChainId];
         require(toProxyHash.length != 0, "empty illegal toProxyHash");
         
-        groupBalance[fromAsset][groupKey].add(amount);
+        groupBalance[fromAsset][groupKey] = groupBalance[fromAsset][groupKey].add(amount);
         
         require(IEthCrossChainManager(managerContract).crossChain(toChainId, toProxyHash, "unlock", txData), "EthCrossChainManager crossChain executed error!");
         
@@ -932,7 +932,7 @@ contract LockProxyGroup is Ownable {
         address toAddress = Utils.bytesToAddress(toAddressHash);
         
         require(groupBalance[toAsset][groupKey] >= amount, "insufficient group balance");
-        groupBalance[toAsset][groupKey].sub(amount);
+        groupBalance[toAsset][groupKey] = groupBalance[toAsset][groupKey].sub(amount);
         
         require(_transferFromContract(toAsset, toAddress, amount), "transfer asset from lock_proxy contract to toAddress failed!");
         
@@ -1009,7 +1009,6 @@ contract LockProxyGroup is Ownable {
         }
         return true;
     }
-    
     
     function _transferERC20ToContract(address fromAssetHash, address fromAddress, address toAddress, uint256 amount) internal returns (bool) {
          IERC20 erc20Token = IERC20(fromAssetHash);
