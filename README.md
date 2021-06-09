@@ -13,7 +13,7 @@ But keep in mind: ztj wish you guys to figure it out for yourself.
 ## LockProxyGroup.sol
 demo去中心化上币的LockProxy合约。
 
-construct(): 设置模拟链Id以及Hub合约地址。
+constructor(): 设置模拟链Id以及Hub合约地址。
 
 setManagerContract(): 设置Hub合约地址。
 

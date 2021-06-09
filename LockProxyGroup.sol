@@ -733,8 +733,8 @@ contract LockProxyGroup is Ownable {
     using SafeMath for uint;
     using SafeERC20 for IERC20;
     
-    uint64 chainId;
-    address managerContract;
+    uint64 public chainId;
+    address public managerContract;
     mapping(uint64 => bytes) public proxyHashMap;
     mapping(bytes20 => uint8) public groupTokenNumMap;
     mapping(bytes20 => bytes) public groupOwnerMap;
@@ -829,7 +829,7 @@ contract LockProxyGroup is Ownable {
         for (uint i=0; i<groupTokenNum; i++) {
             if (tokenChainIds[i] == chainId) { 
                 address thisToken = Utils.bytesToAddress(tokenAddrs[i]);
-                groupBalance[thisToken][newKey] ==  groupBalance[thisToken][oldKey]; 
+                groupBalance[thisToken][newKey] = groupBalance[thisToken][oldKey]; 
                 delete groupBalance[thisToken][oldKey];
             }
             if (tokenChainIds[i] == idTmp) {
@@ -869,7 +869,7 @@ contract LockProxyGroup is Ownable {
         for (uint i=0; i<groupTokenNum; i++) {
             if (tokenChainIds[i] == chainId) { 
                 address thisToken = Utils.bytesToAddress(tokenAddrs[i]);
-                groupBalance[thisToken][newKey] ==  groupBalance[thisToken][oldKey];
+                groupBalance[thisToken][newKey] = groupBalance[thisToken][oldKey];
                 delete groupBalance[thisToken][oldKey];
             }
             groupTokenHashMap[newKey][tokenChainIds[i]] = tokenAddrs[i];
