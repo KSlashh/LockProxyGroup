@@ -37,8 +37,8 @@ updateGroup(): 由发起链的LockProxyGroup合约创建请求，经跨链后，
 addCrossChainLiquidity(): 向一个Group添加跨链流动性。添加后无法移除。
 
 lock(): 发起跨链，源链锁定一部分资产，包含参数：
-  + groupKey: 需要升级的原始Group key。
-  + fromAsset: 新group的token总数。
+  + groupKey: 跨链使用的Group key。
+  + fromAsset: 跨链的源链资产。
   + amonut: 跨链数额。
   + toAddress: 接受地址。
   + toChainId: 目标链Id。
