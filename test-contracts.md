@@ -4,7 +4,7 @@ Admin：0x48ecd621d945dAdBa2a8e4385eC2EF773DFC794F
 
 ### Contract Address
 
-#**LPG-n** means LockProxyGroup that chainId is **n ** 
+#**LPG-n** means LockProxyGroup that chainId is **n** 
 
 Hub: 0x8720ed263B46b771D0fb72963C63Fe50f5F0C3DF
 
