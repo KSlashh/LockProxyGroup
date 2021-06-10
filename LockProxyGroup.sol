@@ -735,13 +735,13 @@ contract LockProxyGroup is Ownable {
     
     uint64 public chainId;
     address public managerContract;
-    mapping(uint64 => bytes) public proxyHashMap;
-    mapping(bytes20 => uint8) public groupTokenNumMap;
-    mapping(bytes20 => bytes) public groupOwnerMap;
-    mapping(bytes20 => uint64) public groupCreateChainIdMap;
-    mapping(address => mapping(bytes20 => uint)) public groupBalance;
-    mapping(bytes20 => mapping(uint64 => bytes)) public groupTokenHashMap;
-    mapping(bytes20 => mapping(uint => uint64)) public indexedGroupTokenChainId;
+    mapping(uint64 => bytes) public proxyHashMap;           // proxyHashMap[LockProxy] = chainID, bind proxy with its chainID
+    mapping(bytes20 => uint8) public groupTokenNumMap;      // groupTokenNumMap[key] = num, register the key for token group, num denotes the number in that group
+    mapping(bytes20 => bytes) public groupOwnerMap;         // groupOwnerMap[key] = owner_address, owner of token group
+    mapping(bytes20 => uint64) public groupCreateChainIdMap;// groupCreateChainIdMap[key] = tokenChainID, denotes in which chain the token group was created
+    mapping(address => mapping(bytes20 => uint)) public groupBalance; // groupdBalance[asset][key], available balance for each token within a group
+    mapping(bytes20 => mapping(uint64 => bytes)) public groupTokenHashMap; // groupTokenHashMap[key][tokenChainId] = tokenAddr, tokenChainId ==> tokenAddr
+    mapping(bytes20 => mapping(uint => uint64)) public indexedGroupTokenChainId; // indexedGroupTokenChainId[key][i] = tokenChainId, key ==> list of tokens' chainID
     
     event RegisterGroupEvent(bytes owner, uint64 ownerChainId, bytes20 groupKey, uint8 groupTokenNum);
     event UpdateGroupEvent(bytes20 oldKey, bytes20 newKey);
@@ -767,16 +767,17 @@ contract LockProxyGroup is Ownable {
         proxyHashMap[toChainId] = toProxyHash;
     }
     
+    // owner register token group on original chain
     function ownerCreateGroup(uint8 num, uint64[] memory tokenChainIds, bytes[] memory tokenAddrs) public returns(bytes20 key) {
         key = generateKey(chainId, Utils.addressToBytes(msg.sender), num, tokenChainIds, tokenAddrs);
         require(groupTokenNumMap[key]==0, "group already registered");
         
         bytes memory groupData = abi.encode(chainId, Utils.addressToBytes(_msgSender()), num, tokenChainIds, tokenAddrs, key);
         for (uint i=0; i<num; i++) {
-            require(tokenChainIds[i] > (i==0 ? 0 : tokenChainIds[i-1]) , "not asc chainIds!");
+            require(tokenChainIds[i] > (i==0 ? 0 : tokenChainIds[i-1]) , "not asc chainIds!"); // ascending sorted chainIds
             groupTokenHashMap[key][tokenChainIds[i]] = tokenAddrs[i];
             indexedGroupTokenChainId[key][i] = tokenChainIds[i];
-            if (chainId != tokenChainIds[i]) { 
+            if (chainId != tokenChainIds[i]) { // notify lock proxy in the target chains to register group
                 IEthCrossChainManager(managerContract).crossChain(tokenChainIds[i], proxyHashMap[tokenChainIds[i]], "registerGroup", groupData);
             }
         }
@@ -788,6 +789,7 @@ contract LockProxyGroup is Ownable {
         RegisterGroupEvent(Utils.addressToBytes(_msgSender()), chainId, key, num);
     }
     
+    // lock proxy on target chains register token group with notification from original chain
     function registerGroup(bytes memory groupData, bytes memory fromContract, uint64 fromChainId) public onlyManagerContract returns(bool) {
         bytes memory groupOwner;
         uint64 ownerChainId;
@@ -814,6 +816,7 @@ contract LockProxyGroup is Ownable {
         return true;
     }
     
+    // add new token to an exisiting token group
     function ownerUpdateGroup(bytes20 oldKey, uint8 groupTokenNum, uint64[] memory tokenChainIds, bytes[] memory tokenAddrs) public {
         require(groupTokenNumMap[oldKey]!=0, "group do not exisit");
         require(Utils.equalStorage(groupOwnerMap[oldKey], Utils.addressToBytes(_msgSender())), "not group owner");
@@ -827,23 +830,24 @@ contract LockProxyGroup is Ownable {
         uint64 idTmp = indexedGroupTokenChainId[oldKey][index];
         uint8 oldNum = groupTokenNumMap[oldKey];
         for (uint i=0; i<groupTokenNum; i++) {
-            if (tokenChainIds[i] == chainId) { 
+            if (tokenChainIds[i] == chainId) { // rebalance of the token on original chain for new key
                 address thisToken = Utils.bytesToAddress(tokenAddrs[i]);
                 groupBalance[thisToken][newKey] = groupBalance[thisToken][oldKey]; 
                 delete groupBalance[thisToken][oldKey];
             }
-            if (tokenChainIds[i] == idTmp) {
+
+            if (tokenChainIds[i] == idTmp) { // token is existing in old group
                 require(Utils.equalStorage(groupTokenHashMap[oldKey][idTmp], tokenAddrs[i]), "unmatch token list");
                 idTmp = index==oldNum ? 0 : indexedGroupTokenChainId[oldKey][++index];
                 if (chainId != tokenChainIds[i]) { 
                     IEthCrossChainManager(managerContract).crossChain(tokenChainIds[i], proxyHashMap[tokenChainIds[i]], "updateGroup", updateData);
                 }
-            } else {
+            } else { // token is new to group
                 if (chainId != tokenChainIds[i]) { 
                     IEthCrossChainManager(managerContract).crossChain(tokenChainIds[i], proxyHashMap[tokenChainIds[i]], "registerGroup", groupData);
                 }
             }
-            groupTokenHashMap[newKey][tokenChainIds[i]] = tokenAddrs[i];
+            groupTokenHashMap[newKey][tokenChainIds[i]] = tokenAddrs[i]; // key --> (ChainID --> TokenAddress)
             indexedGroupTokenChainId[newKey][i] = tokenChainIds[i];
         }
         require(index==oldNum, "unmatch token list");
@@ -889,7 +893,7 @@ contract LockProxyGroup is Ownable {
     function addCrossChainLiquidity(bytes20 groupKey, address asset, uint amount) public {
         require(groupTokenNumMap[groupKey]!=0, "group not exisit");
         require(Utils.equalStorage(groupTokenHashMap[groupKey][chainId], Utils.addressToBytes(asset)),"asset not in group");
-        require(_transferToContract(asset, amount), "transfer asset from fromAddress to lock_proxy contract  failed!");
+        require(_transferToContract(asset, amount), "transfer asset from fromAddress to lock_proxy contract  failed!"); // transfer asset to LockProxy
         groupBalance[asset][groupKey] = groupBalance[asset][groupKey].add(amount);
         
         emit AddCrossChainLiquidityEvent(_msgSender(), groupKey, asset, amount);
