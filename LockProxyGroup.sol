@@ -745,6 +745,7 @@ contract LockProxyGroup is Ownable {
     
     event RegisterGroupEvent(bytes owner, uint64 ownerChainId, bytes20 groupKey, uint8 groupTokenNum);
     event UpdateGroupEvent(bytes20 oldKey, bytes20 newKey);
+    event MergeGroupEvent(bytes20 oldKey, bytes20 newKey);
     event AddCrossChainLiquidityEvent(address donator, bytes20 groupKey, address asset, uint amount);
     event UnlockEvent(bytes20 GroupKey, address toAssetHash, address toAddress, uint256 amount);
     event LockEvent(bytes20 GroupKey, address fromAssetHash, address fromAddress, uint64 toChainId, bytes toAssetHash, bytes toAddress, uint256 amount);
@@ -824,8 +825,34 @@ contract LockProxyGroup is Ownable {
         
         bytes20 newKey = generateKey(chainId, Utils.addressToBytes(_msgSender()), groupTokenNum, tokenChainIds, tokenAddrs);
         bytes memory updateData = abi.encode(chainId, Utils.addressToBytes(_msgSender()), groupTokenNum, tokenChainIds, tokenAddrs, oldKey, newKey);
+        if (groupTokenNumMap[newKey]!=0) { // If upgrade to group already exisit, merge old group balance to new group
+            uint index = 0;
+            uint64 idTmp = indexedGroupTokenChainId[oldKey][index];
+            uint8 oldNum = groupTokenNumMap[oldKey];
+            for (uint i=0; i<groupTokenNum; i++) {
+                if (tokenChainIds[i] == chainId) { // rebalance of the token on original chain for new key
+                    address thisToken = Utils.bytesToAddress(tokenAddrs[i]);
+                    groupBalance[thisToken][newKey] += groupBalance[thisToken][oldKey]; 
+                    delete groupBalance[thisToken][oldKey];
+                }
+
+                if (tokenChainIds[i] == idTmp) { // token is existing in old group
+                    require(Utils.equalStorage(groupTokenHashMap[oldKey][idTmp], tokenAddrs[i]), "unmatch token list");
+                    idTmp = index==oldNum ? 0 : indexedGroupTokenChainId[oldKey][++index];
+                    if (chainId != tokenChainIds[i]) { 
+                        IEthCrossChainManager(managerContract).crossChain(tokenChainIds[i], proxyHashMap[tokenChainIds[i]], "updateGroup", updateData);
+                    }
+                } else { // token is new to group
+                    // do nothing
+                }
+            }
+            require(index==oldNum, "unmatch token list");
+            _deleteGroup(oldKey);
+            MergeGroupEvent(oldKey, newKey);
+            return;
+        }
+
         bytes memory groupData = abi.encode(chainId, Utils.addressToBytes(_msgSender()), groupTokenNum, tokenChainIds, tokenAddrs, newKey);
-        
         uint index = 0;
         uint64 idTmp = indexedGroupTokenChainId[oldKey][index];
         uint8 oldNum = groupTokenNumMap[oldKey];
@@ -869,6 +896,19 @@ contract LockProxyGroup is Ownable {
         bytes20 oldKey;
         bytes20 newKey;
         (ownerChainId, groupOwner, groupTokenNum, tokenChainIds, tokenAddrs, oldKey, newKey) = abi.decode(updateData, (uint64, bytes, uint8, uint64[], bytes[], bytes20, bytes20));
+
+        if (groupTokenNumMap[newKey]!=0) { // If upgrade to group already exisit, merge old group balance to new group
+            for (uint i=0; i<groupTokenNum; i++) {
+                if (tokenChainIds[i] == chainId) { 
+                    address thisToken = Utils.bytesToAddress(tokenAddrs[i]);
+                    groupBalance[thisToken][newKey] += groupBalance[thisToken][oldKey];
+                    delete groupBalance[thisToken][oldKey];
+                }
+            }
+            _deleteGroup(oldKey);
+            MergeGroupEvent(oldKey, newKey);
+            return true;
+        }
 
         for (uint i=0; i<groupTokenNum; i++) {
             if (tokenChainIds[i] == chainId) { 
